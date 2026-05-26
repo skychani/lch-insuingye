@@ -699,18 +699,19 @@ function renderPending(area){
   area.innerHTML=html;
 }
 function goToMail(emailId){
-  // 전체 뷰로 전환
-  currentView='all'; activeTag=null; activeMonth=null;
-  document.querySelectorAll('.nav-item,.tag-filter,.month-item').forEach(function(n){n.classList.remove('active');});
-  var allBtn = document.getElementById('nav-all-btn');
-  if(allBtn) allBtn.classList.add('active');
-  render();
-  // 해당 메일 선택 & 스크롤
-  setTimeout(function(){
-    selectMail(emailId);
-    var card = document.querySelector('.mail-card[data-id="'+emailId+'"]');
-    if(card) card.scrollIntoView({behavior:'smooth', block:'center'});
-  }, 50);
+  var e = emails.find(function(x){ return x.id === emailId; });
+  if(!e) return;
+  // 상세 패널에 메일 바로 표시 (뷰 전환 없이)
+  e.read = true;
+  saveStorage();
+  renderDetail(e);
+  selectedId = emailId;
+  // 메일 목록 카드 선택 상태도 업데이트 (전체 뷰일 때)
+  document.querySelectorAll('.mail-card').forEach(function(el){
+    var eid = parseInt(el.getAttribute('data-id'));
+    el.classList.toggle('selected', eid === emailId);
+    if(eid === emailId) el.classList.remove('unread');
+  });
 }
 function addPendingDirect(){var inp=document.getElementById('np-input');var desc=inp.value.trim();if(!desc)return;pending.push({id:nextId++,desc,from:'',date:new Date().toISOString(),done:false});inp.value='';saveStorage();render();}
 function togglePending(id,done){var p=pending.find(function(x){return x.id===id;});if(p){p.done=done;saveStorage();render();}}
