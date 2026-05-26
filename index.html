@@ -780,18 +780,24 @@ function renderContacts(area){
   }
 
   var html='<div style="padding:14px">'
+    // 상단 툴바: 재스캔 버튼 항상 노출
+    +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">'
+      +'<button class="btn" onclick="reScanContacts()" style="display:flex;align-items:center;gap:5px;">'
+        +'<span style="font-size:13px">↻</span> 메일에서 관계자 재스캔'
+      +'</button>'
+      +'<span style="font-size:11px;color:var(--text-dim);">저장된 '+emails.length+'건 메일 기준</span>'
+    +'</div>'
     +'<div class="add-row" style="margin-bottom:12px">'
       +'<input type="text" id="c-name" placeholder="이름" style="flex:1">'
       +'<input type="text" id="c-role" placeholder="역할/소속" style="flex:1">'
       +'<input type="text" id="c-email" placeholder="이메일" style="flex:2">'
-      +'<button class="btn btn-primary" onclick="addContactDirect()">+ 추가</button>'
+      +'<button class="btn btn-primary" onclick="addContactDirect()">+ 직접 추가</button>'
     +'</div>'
     +'<div class="section-hdr"><span class="section-hdr-label">메일에서 자동 추출</span>'
       +'<span class="section-hdr-count">'+auto.length+'명</span>'
-      +(auto.length>0 ? '<button class="btn" style="margin-left:auto;font-size:10px;padding:2px 8px" onclick="reScanContacts()">↻ 재스캔</button>' : '')
     +'</div>'
     +(auto.length===0
-      ? '<div style="font-size:12px;color:var(--text-dim);padding:10px 4px;">EML을 불러오면 발신자/수신자가 자동으로 추가됩니다.</div>'
+      ? '<div style="font-size:12px;color:var(--text-dim);padding:10px 4px;">위 [메일에서 관계자 재스캔] 버튼을 눌러 자동 추출하세요.</div>'
       : auto.map(cardHtml).join('')
     )
     +(manual.length>0
