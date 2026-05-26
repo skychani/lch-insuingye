@@ -181,17 +181,6 @@ mark{background:#c8a96e33;color:var(--accent);border-radius:2px;padding:0 1px}
       </select>
     </div>
     <div id="main-area" class="mail-list" style="flex:1;overflow-y:auto"></div>
-    <!-- 타임라인 패널 -->
-    <div id="timeline-panel" style="height:160px;min-height:130px;border-top:1px solid var(--border);background:var(--surface);flex-shrink:0;display:flex;flex-direction:column;overflow:hidden">
-      <div style="display:flex;align-items:center;gap:10px;padding:6px 14px;border-bottom:1px solid var(--border);flex-shrink:0">
-        <span style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--text-dim);letter-spacing:.08em">TIMELINE</span>
-        <div id="tl-legend" style="display:flex;gap:10px;flex-wrap:wrap"></div>
-        <span id="tl-hover-info" style="margin-left:auto;font-size:11px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:340px"></span>
-      </div>
-      <div style="flex:1;overflow-x:auto;overflow-y:hidden;padding:8px 14px;position:relative" id="tl-scroll">
-        <canvas id="tl-canvas" style="display:block"></canvas>
-      </div>
-    </div>
   </div>
   <div class="detail-panel" id="detail-panel">
     <div class="empty-state" style="height:100%">
@@ -532,7 +521,7 @@ function getFiltered(){
 }
 
 // ─── 렌더 ───
-function render(){updateStats();buildSidebar();var a=document.getElementById('main-area');if(currentView==='contacts'){renderContacts(a);renderTimeline();return;}if(currentView==='pending'){renderPending(a);renderTimeline();return;}renderList();renderTimeline();}
+function render(){updateStats();buildSidebar();var a=document.getElementById('main-area');if(currentView==='contacts'){renderContacts(a);return;}if(currentView==='pending'){renderPending(a);return;}renderList();}
 function renderList(){
   var area=document.getElementById('main-area');
   if(emails.length===0){
@@ -594,7 +583,6 @@ function selectMail(id){
   // ⑤ 렌더 후에도 스크롤 위치 재확인 (innerHTML 교체로 튀는 경우 대비)
   requestAnimationFrame(function(){
     if(listArea) listArea.scrollTop = savedScroll;
-    renderTimeline(); // 선택된 메일 도트 강조 갱신
   });
 }
 function renderDetail(e){
@@ -826,218 +814,6 @@ function onCatDragEnd(){
   document.querySelectorAll('.tag-filter').forEach(function(el){el.classList.remove('drag-over','dragging');});
 }
 
-// ─── 타임라인 (도트 타임라인) ───
-var tlDotMap = []; // {x, y, email} for hover/click
-
-function renderTimeline(){
-  var canvas = document.getElementById('tl-canvas');
-  var scroll = document.getElementById('tl-scroll');
-  var legend = document.getElementById('tl-legend');
-  if(!canvas) return;
-
-  if(!emails.length){
-    var ctx0 = canvas.getContext('2d');
-    canvas.width = scroll.clientWidth || 600;
-    canvas.height = scroll.clientHeight || 100;
-    ctx0.fillStyle = '#444';
-    ctx0.font = '12px Noto Sans KR,sans-serif';
-    ctx0.textAlign = 'center';
-    ctx0.fillText('EML 파일을 불러오면 타임라인이 표시됩니다', canvas.width/2, canvas.height/2);
-    legend.innerHTML = '';
-    return;
-  }
-
-  var allDates = emails.map(function(e){ return new Date(e.date); }).filter(function(d){ return !isNaN(d); });
-  if(!allDates.length) return;
-
-  var minDate = new Date(Math.min.apply(null, allDates));
-  var maxDate = new Date(Math.max.apply(null, allDates));
-  // 범위가 같은 날이면 ±1일 여유
-  if(minDate.getTime() === maxDate.getTime()){
-    minDate = new Date(minDate.getTime() - 86400000);
-    maxDate = new Date(maxDate.getTime() + 86400000);
-  }
-  // 월 단위로 스냅
-  minDate = new Date(minDate.getFullYear(), minDate.getMonth(), 1);
-  maxDate = new Date(maxDate.getFullYear(), maxDate.getMonth() + 1, 0);
-
-  var PADDING_L = 8, PADDING_R = 20;
-  var H = scroll.clientHeight || 110;
-  var AXIS_Y = H - 22;   // 날짜축 Y
-  var DOT_AREA_TOP = 8;  // 도트 영역 상단
-  var DOT_AREA_H = AXIS_Y - DOT_AREA_TOP - 6;
-
-  // 전체 기간의 월 목록 생성
-  var months = [];
-  var mc = new Date(minDate.getFullYear(), minDate.getMonth(), 1);
-  while(mc <= maxDate){
-    months.push(new Date(mc));
-    mc.setMonth(mc.getMonth() + 1);
-  }
-
-  var MONTH_W = Math.max(52, Math.floor((scroll.clientWidth - PADDING_L - PADDING_R - 40) / Math.max(months.length, 1)));
-  var totalW = Math.max(PADDING_L + months.length * MONTH_W + PADDING_R, scroll.clientWidth || 600);
-
-  canvas.width = totalW;
-  canvas.height = H;
-  var ctx = canvas.getContext('2d');
-  ctx.clearRect(0, 0, totalW, H);
-
-  var totalMs = maxDate.getTime() - minDate.getTime();
-  function dateToX(d){
-    return PADDING_L + ((d.getTime() - minDate.getTime()) / totalMs) * (totalW - PADDING_L - PADDING_R);
-  }
-
-  // 격선 & 월 레이블
-  ctx.strokeStyle = '#2a2a35';
-  ctx.lineWidth = 1;
-  months.forEach(function(m){
-    var x = dateToX(m);
-    ctx.beginPath(); ctx.moveTo(x, DOT_AREA_TOP); ctx.lineTo(x, AXIS_Y); ctx.stroke();
-    ctx.fillStyle = '#555';
-    ctx.font = '9px IBM Plex Mono,monospace';
-    ctx.textAlign = 'left';
-    // 연도 표시: 1월이거나 첫 달
-    var label = (m.getMonth() === 0)
-      ? m.getFullYear() + '.' + String(m.getMonth()+1).padStart(2,'0')
-      : String(m.getMonth()+1) + '월';
-    ctx.fillText(label, x + 3, H - 6);
-  });
-
-  // 축선
-  ctx.strokeStyle = '#333340';
-  ctx.lineWidth = 1;
-  ctx.beginPath(); ctx.moveTo(PADDING_L, AXIS_Y); ctx.lineTo(totalW - PADDING_R, AXIS_Y); ctx.stroke();
-
-  // 카테고리별 레인 높이 계산 (균등 분할)
-  var activeCats = categories.filter(function(c){
-    return emails.some(function(e){ return e.tag === c.name; });
-  });
-  var laneH = activeCats.length > 0 ? DOT_AREA_H / activeCats.length : DOT_AREA_H;
-
-  // 도트 그리기
-  tlDotMap = [];
-  var DOT_R = 4;
-
-  activeCats.forEach(function(cat, li){
-    var laneY = DOT_AREA_TOP + li * laneH + laneH / 2;
-    var catEmails = emails.filter(function(e){ return e.tag === cat.name; });
-
-    // 같은 날짜 겹침 처리: x좌표 기준으로 그루핑
-    var xGroups = {};
-    catEmails.forEach(function(e){
-      var d = new Date(e.date);
-      if(isNaN(d)) return;
-      var x = Math.round(dateToX(d));
-      if(!xGroups[x]) xGroups[x] = [];
-      xGroups[x].push(e);
-    });
-
-    Object.keys(xGroups).forEach(function(xStr){
-      var gx = parseInt(xStr);
-      var grp = xGroups[xStr];
-      grp.forEach(function(e, gi){
-        var offsetY = (grp.length > 1) ? (gi - (grp.length-1)/2) * (DOT_R*2+1) : 0;
-        var dotY = laneY + offsetY;
-
-        // 선택된 메일 강조
-        var isSelected = (e.id === selectedId);
-        ctx.beginPath();
-        ctx.arc(gx, dotY, isSelected ? DOT_R + 2 : DOT_R, 0, Math.PI * 2);
-        ctx.fillStyle = cat.color;
-        ctx.globalAlpha = isSelected ? 1.0 : (e.read ? 0.55 : 0.9);
-        ctx.fill();
-        ctx.globalAlpha = 1;
-
-        if(isSelected){
-          ctx.beginPath();
-          ctx.arc(gx, dotY, DOT_R + 4, 0, Math.PI * 2);
-          ctx.strokeStyle = cat.color;
-          ctx.lineWidth = 1.5;
-          ctx.stroke();
-        }
-
-        tlDotMap.push({ x: gx, y: dotY, r: DOT_R + 4, email: e });
-      });
-    });
-  });
-
-  // 범례
-  legend.innerHTML = activeCats.map(function(c){
-    return '<span style="display:inline-flex;align-items:center;gap:4px;font-size:10px;color:var(--text-dim)">'
-      + '<span style="width:7px;height:7px;border-radius:50%;background:'+c.color+';display:inline-block"></span>'
-      + c.name + '</span>';
-  }).join('');
-}
-
-// 타임라인 캔버스 이벤트
-(function(){
-  var lastHover = null;
-  function getHitDot(cx, cy){
-    for(var i = tlDotMap.length - 1; i >= 0; i--){
-      var d = tlDotMap[i];
-      var dx = cx - d.x, dy = cy - d.y;
-      if(dx*dx + dy*dy <= d.r * d.r) return d;
-    }
-    return null;
-  }
-  document.addEventListener('DOMContentLoaded', function(){
-    var canvas = document.getElementById('tl-canvas');
-    var scroll = document.getElementById('tl-scroll');
-    var info = document.getElementById('tl-hover-info');
-    if(!canvas) return;
-
-    canvas.style.cursor = 'default';
-
-    canvas.addEventListener('mousemove', function(e){
-      var rect = canvas.getBoundingClientRect();
-      var cx = e.clientX - rect.left + scroll.scrollLeft;
-      var cy = e.clientY - rect.top;
-      var hit = getHitDot(cx, cy);
-      if(hit){
-        canvas.style.cursor = 'pointer';
-        if(lastHover !== hit.email.id){
-          lastHover = hit.email.id;
-          var em = hit.email;
-          var d = new Date(em.date);
-          var ds = d.getFullYear()+'.'+(d.getMonth()+1)+'.'+(d.getDate());
-          info.textContent = '[' + (em.tag||'') + ']  ' + ds + '  ' + (em.from ? em.from.replace(/<[^>]+>/g,'').trim() : '') + '  — ' + (em.subject||'(제목없음)');
-        }
-      } else {
-        canvas.style.cursor = 'default';
-        if(lastHover !== null){ lastHover = null; info.textContent = ''; }
-      }
-    });
-
-    canvas.addEventListener('mouseleave', function(){
-      lastHover = null;
-      var info = document.getElementById('tl-hover-info');
-      if(info) info.textContent = '';
-    });
-
-    canvas.addEventListener('click', function(e){
-      var rect = canvas.getBoundingClientRect();
-      var cx = e.clientX - rect.left + scroll.scrollLeft;
-      var cy = e.clientY - rect.top;
-      var hit = getHitDot(cx, cy);
-      if(hit){
-        // 전체 뷰로 전환 후 해당 메일 선택
-        if(currentView !== 'all'){
-          currentView = 'all'; activeTag = null; activeMonth = null;
-          document.querySelectorAll('.nav-item,.tag-filter,.month-item').forEach(function(n){n.classList.remove('active');});
-          var allBtn = document.getElementById('nav-all-btn');
-          if(allBtn) allBtn.classList.add('active');
-          render();
-        }
-        setTimeout(function(){
-          selectMail(hit.email.id);
-          var card = document.querySelector('.mail-card[data-id="'+hit.email.id+'"]');
-          if(card) card.scrollIntoView({behavior:'smooth', block:'center'});
-        }, 30);
-      }
-    });
-  });
-})();
 
 function exportData(){
   // 모달 열기
@@ -1173,7 +949,7 @@ function showToast(msg){
   t._timer=setTimeout(function(){t.style.opacity='0';},3000);
 }
 
-loadStorage();render();window.addEventListener('resize',function(){renderTimeline();});
+loadStorage();render();window.addEventListener('resize',function(){});
 </script>
 </body>
 </html>
